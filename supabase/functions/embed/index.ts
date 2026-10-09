@@ -1,5 +1,7 @@
 // `embed`: called by a Postgres trigger (pg_net) after a node is inserted or its title/body/kind changes.
 // POST {"node_id": "<uuid>"} with header x-mind-webhook-secret. Writes mind.nodes.embedding (gte-small, 384d).
+// The secret lives only in mind.internal_config (the trigger reads it there too), so it never needs
+// to be copied into an Edge Function secret.
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { embedText, nodeEmbeddingText, sha256Hex } from "../_shared/embed.ts";
 import { createAdminClient } from "../_shared/supabaseAdmin.ts";
@@ -24,12 +26,33 @@ async function secretsMatch(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
+let cachedSecret: string | null = null;
+
+async function webhookSecret(db: ReturnType<typeof createAdminClient>): Promise<string | null> {
+  if (cachedSecret) return cachedSecret;
+  const { data, error } = await db
+    .from("internal_config")
+    .select("value")
+    .eq("key", "webhook_secret")
+    .maybeSingle();
+  if (error) throw new Error(`load webhook secret: ${error.message}`);
+  cachedSecret = data?.value ?? null;
+  return cachedSecret;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
-  const expected = Deno.env.get("EMBED_WEBHOOK_SECRET");
+  const db = createAdminClient();
+  let expected: string | null;
+  try {
+    expected = await webhookSecret(db);
+  } catch (e) {
+    console.error("embed:", e instanceof Error ? e.message : String(e));
+    return json({ error: "server misconfigured" }, 500);
+  }
   if (!expected) {
-    console.error("embed: EMBED_WEBHOOK_SECRET is not set; refusing all requests");
+    console.error("embed: mind.internal_config has no webhook_secret; refusing all requests");
     return json({ error: "server misconfigured" }, 500);
   }
   const provided = req.headers.get("x-mind-webhook-secret") ?? "";
@@ -46,10 +69,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const db = createAdminClient();
     const { data: node, error } = await db
       .from("nodes")
-      .select("id, kind, title, body, status, updated_at, embedding_source_hash")
+      .select("id, kind, title, body, status, content_updated_at, embedding_source_hash")
       .eq("id", nodeId)
       .maybeSingle();
     if (error) throw new Error(`load node: ${error.message}`);
@@ -67,12 +89,13 @@ Deno.serve(async (req) => {
 
     const vector = await embedText(text);
 
-    // updated_at guard: a newer edit changes updated_at, so an older run can't overwrite it.
+    // Race guard: a newer kind/title/body edit bumps content_updated_at (and queues its own embed),
+    // so an older run can't overwrite it. Status/importance/meta edits don't affect it.
     const { data: updated, error: updErr } = await db
       .from("nodes")
       .update({ embedding: JSON.stringify(vector), embedding_source_hash: hash })
       .eq("id", node.id)
-      .eq("updated_at", node.updated_at)
+      .eq("content_updated_at", node.content_updated_at)
       .select("id");
     if (updErr) throw new Error(`write embedding: ${updErr.message}`);
     if (!updated || updated.length === 0) return json({ status: "stale", node_id: node.id });

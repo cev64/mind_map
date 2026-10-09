@@ -33,6 +33,7 @@ create table mind.nodes (
   meta jsonb not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  content_updated_at timestamptz not null default now(),  -- bumped only by kind/title/body edits; embed's race guard
   last_touched_at timestamptz not null default now()
 );
 
@@ -139,6 +140,7 @@ create index link_checks_node_b_idx on mind.link_checks (node_b);
 -- ---------------------------------------------------------------------------
 
 -- updated_at: bump only when a content column changes (not embedding / hash / last_touched_at).
+-- content_updated_at: bump only when the embedded text (kind/title/body) changes.
 create function mind.set_updated_at()
 returns trigger
 language plpgsql
@@ -151,6 +153,11 @@ begin
     new.updated_at := now();
   else
     new.updated_at := old.updated_at;
+  end if;
+  if (new.kind, new.title, new.body) is distinct from (old.kind, old.title, old.body) then
+    new.content_updated_at := now();
+  else
+    new.content_updated_at := old.content_updated_at;
   end if;
   return new;
 end;
@@ -294,7 +301,7 @@ as $$
     join mind.nodes nn
       on nn.id = (case when e.source_id = w.id then e.target_id else e.source_id end)
      and nn.status not in ('rejected', 'archived')
-    where w.d < depth
+    where w.d < least(depth, 3)
   ),
   ids as (select distinct id from walk)
   select jsonb_build_object(
@@ -566,7 +573,8 @@ grant execute on function mind.find_tensions() to authenticated, service_role;
 
 -- future objects in mind get no implicit grants for API roles
 alter default privileges in schema mind revoke all on tables from anon, authenticated;
-alter default privileges in schema mind revoke all on functions from anon, authenticated;
+-- Functions: PUBLIC's default EXECUTE is global and can't be revoked per schema, so every
+-- migration that adds a function in mind must revoke execute from public, anon explicitly.
 
 -- ---------------------------------------------------------------------------
 -- 8. Realtime

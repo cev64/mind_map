@@ -20,17 +20,19 @@
 - Project URL and publishable key were read from the Supabase project (both public); `.env.local` exists locally and is git-ignored.
 - **Remote Supabase changes go through the Supabase connector** (confirmed by Charlie), not the CLI: no access token or DB password needed. Migrations are still files in `supabase/migrations/`, tested on the local stack first, SQL shown to Charlie before applying.
 - GitHub: `main` is the default branch; the `github-pages` environment allows deploys from `main`. The session's GitHub integration can't re-run or dispatch workflows, so a deploy is triggered by pushing to `main`.
-- Embed webhook: AFTER INSERT / UPDATE OF kind,title,body trigger → `net.http_post` to `{functions_url}/embed` with header `x-mind-webhook-secret`. `functions_url` and `webhook_secret` live in `mind.internal_config` (RLS on, no policies, no grants to API roles) rather than Vault, to keep everything in `mind`. The function checks the secret against the Edge Function secret `EMBED_WEBHOOK_SECRET` and writes with the service role.
+- Embed webhook: AFTER INSERT / UPDATE OF kind,title,body trigger → `net.http_post` to `{functions_url}/embed` with header `x-mind-webhook-secret`. `functions_url` and `webhook_secret` live in `mind.internal_config` (RLS on, no policies, no grants to API roles) rather than Vault, to keep everything in `mind`. The function reads the same secret from `internal_config` (service role) and compares it in constant time, so the secret exists only in the database: on remote it's generated in SQL and never seen by anyone. Writes are guarded by `nodes.content_updated_at` (bumped only by kind/title/body edits) so an older run can't overwrite a newer edit.
 - Additions beyond the plan's table sketch: `edges.meta` (5b needs it), `edges.created_by` check, `nodes.embedding_source_hash` (skip unchanged text), `mind.internal_config`, `on delete cascade` from `auth.users`. `nodes.updated_at` is bumped only by content changes, never by embedding writes (keeps link_checks freshness correct).
+- **Shared project:** the Budget project also hosts `betting` and `claudehub` schemas, exposed via `alter role authenticator set pgrst.db_schemas`. Migration `20261009230000_mind_expose_schema.sql` appends `mind` to that list (no-op locally).
+- Every new function in `mind` must `revoke execute ... from public, anon` explicitly.
 - PWA (`vite-plugin-pwa`) deferred to Phase 3, when there's a real app shell and icons.
 
 ## Known issues
 - gte-small similarities are compressed high: unrelated sample nodes score ~0.72–0.79, related ~0.81–0.89. The plan's thresholds need tuning in Phase 2/2b: dedupe at 0.88 would wrongly merge "Learn a musical instrument" with "Should I learn piano or guitar?" (0.887); `link_candidates` min_similarity 0.55 filters nothing (k=10 still caps cost).
 
 ## Next steps
-1. Charlie: approve the SQL summary; expose `mind` under Dashboard → Settings → Data API → Exposed schemas (dashboard-only).
-2. Lead: apply the migration via the connector, insert remote `internal_config` (functions_url = https://sygxozspiszqfawkmpzx.supabase.co/functions/v1, a fresh random webhook_secret), set Edge Function secret `EMBED_WEBHOOK_SECRET` to the same value, deploy `embed`, run advisors, verify insert → embedding on remote.
-3. Before Phase 2: `ANTHROPIC_API_KEY` set as an Edge Function secret by Charlie; magic-link email before Phase 3.
+1. Charlie: approve the SQL summary and give the magic-link email (used to pick his auth user for the remote check).
+2. Lead: apply both migrations via the connector; insert remote `internal_config` (functions_url = https://sygxozspiszqfawkmpzx.supabase.co/functions/v1, webhook_secret generated in SQL); deploy `embed` (verify_jwt=false); run advisors; verify insert → embedding on remote with a temporary node, then delete it.
+3. Before Phase 2: `ANTHROPIC_API_KEY` Edge Function secret.
 
 ## Sandbox notes (cloud sessions only)
 - The cloud container re-terminates TLS through a proxy. For `supabase functions serve` to fetch jsr/npm imports, a git-ignored `supabase/functions/.env` sets `DENO_TLS_CA_STORE=mozilla,system` and `SSL_CERT_FILE`/`DENO_CERT` to a copy of `/root/.ccr/ca-bundle.crt` in `supabase/functions/.certs/` (also git-ignored). Not needed on a normal machine.
