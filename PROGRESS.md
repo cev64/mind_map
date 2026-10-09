@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-**Phase 0 — Setup** (code done; waiting on Charlie for credentials and the first `main` deploy)
+**Phase 0 — Setup** (code done; `main` created, Pages enabled with GitHub Actions source, repo variables set; waiting on the first live deploy and on Supabase/Anthropic credentials)
 
 ## Done
 - Vite 8 + React 19 + TypeScript + Tailwind v4 scaffold. Hash routing (`createHashRouter`, react-router 8).
@@ -23,7 +23,7 @@
 - `mind` is not yet in `supabase/config.toml` `[api] schemas`: PostgREST refuses to start while the schema doesn't exist. Add it in Phase 1 together with the migration that creates it.
 
 ## Next steps
-1. Charlie: provide Supabase CLI access, set `ANTHROPIC_API_KEY`, add the two GitHub repository variables, set Pages source to GitHub Actions, merge to `main`.
+1. Charlie: provide Supabase access (CLI token + DB password, or approve using the connector), set `ANTHROPIC_API_KEY`, confirm the magic-link email.
 2. Lead: `supabase link --project-ref sygxozspiszqfawkmpzx`, confirm the Pages deploy is live, then start Phase 1 (data layer).
 
 ## Sandbox notes (cloud sessions only)
