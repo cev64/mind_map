@@ -1,0 +1,142 @@
+/*
+ * Design tokens — the single source for every colour, shadow, radius, font
+ * and motion value in the app. Values come from STYLE.md (Fluid Glass).
+ * Components use the Tailwind utilities mapped in @theme below, never raw values.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* §3 colour */
+  --ink: #08204f;
+  --ink-2: #415373;
+  --ink-3: #63718a;
+  --page: #f4f6fb;
+  --card: #ffffff;
+  --accent: #1059fc;
+  --accent-pressed: #0a45cc;
+  --on-accent: #ffffff;
+  --good: #15803d;
+  --bad: #dc2626;
+  --warn: #b45309;
+  --scrim: rgba(8, 32, 79, 0.28);
+
+  /* §5 backdrop blobs */
+  --blob-a: rgba(16, 89, 252, 0.07);
+  --blob-b: rgba(99, 102, 241, 0.05);
+  --blob-c: rgba(56, 189, 248, 0.04);
+
+  /* §6 glass */
+  --glass: rgba(255, 255, 255, 0.74);
+  --glass-strong: rgba(255, 255, 255, 0.86);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --glass-edge: 0 0 0 1px rgba(8, 32, 79, 0.06);
+  --glass-shadow: 0 1px 2px rgba(8, 32, 79, 0.04), 0 12px 32px -12px rgba(8, 32, 79, 0.14);
+  --glass-shadow-lg: 0 24px 64px -16px rgba(8, 32, 79, 0.28);
+  --fill: rgba(8, 32, 79, 0.05);
+  --fill-2: rgba(8, 32, 79, 0.08);
+  --thumb: #ffffff;
+  --thumb-shadow: 0 1px 2px rgba(8, 32, 79, 0.08), 0 4px 12px -2px rgba(8, 32, 79, 0.12);
+  --accent-shadow: 0 10px 24px -6px rgba(16, 89, 252, 0.45);
+
+  /* §9 motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --spring-soft: cubic-bezier(0.3, 1.25, 0.5, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f5f8ff;
+    --ink-2: #c2cee2;
+    --ink-3: #91a2bf;
+    --page: #0a1122;
+    --card: #0a1122;
+    --accent: #4a82ff;
+    --accent-pressed: #7ba3ff;
+    --on-accent: #0a1122;
+    --good: #4ade80;
+    --bad: #ff8585;
+    --warn: #f2a93b;
+    --scrim: rgba(0, 0, 0, 0.5);
+
+    --blob-a: rgba(74, 130, 255, 0.12);
+    --blob-b: rgba(99, 102, 241, 0.08);
+    --blob-c: rgba(56, 189, 248, 0.05);
+
+    --glass: rgba(20, 32, 56, 0.72);
+    --glass-strong: rgba(17, 27, 48, 0.88);
+    --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --glass-edge: 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 16px 40px -14px rgba(0, 0, 0, 0.6);
+    --glass-shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+    --fill: rgba(255, 255, 255, 0.06);
+    --fill-2: rgba(255, 255, 255, 0.1);
+    --thumb: rgba(255, 255, 255, 0.14);
+    --thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+    --accent-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-page: var(--page);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-accent-pressed: var(--accent-pressed);
+  --color-on-accent: var(--on-accent);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-scrim: var(--scrim);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-thumb: var(--thumb);
+  --color-transparent: transparent;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Inter', sans-serif;
+
+  /* §4 type scale: size / line-height / tracking */
+  --text-*: initial;
+  --text-display: 40px;
+  --text-display--line-height: 44px;
+  --text-display--letter-spacing: 0.8px;
+  --text-hero: 48px;
+  --text-hero--line-height: 52px;
+  --text-hero--letter-spacing: -1px;
+  --text-title: 24px;
+  --text-title--line-height: 30px;
+  --text-title--letter-spacing: -0.48px;
+  --text-card-title: 17px;
+  --text-card-title--line-height: 24px;
+  --text-card-title--letter-spacing: -0.2px;
+  --text-control: 15px;
+  --text-control--line-height: 20px;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-micro: 12px;
+  --text-micro--line-height: 16px;
+  --text-micro--letter-spacing: 0.72px;
+
+  --radius-control: 12px;
+  --radius-menu: 18px;
+  --radius-card: 20px;
+  --radius-rail: 24px;
+  --radius-sheet: 28px;
+  --radius-pill: 999px;
+
+  --shadow-glass: var(--glass-hi), var(--glass-edge), var(--glass-shadow);
+  --shadow-glass-lg: var(--glass-hi), var(--glass-edge), var(--glass-shadow-lg);
+  --shadow-thumb: var(--thumb-shadow);
+  --shadow-accent: var(--accent-shadow);
+
+  --ease-out: var(--ease);
+  --ease-spring: var(--spring);
+  --ease-spring-soft: var(--spring-soft);
+}

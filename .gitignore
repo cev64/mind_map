@@ -1,0 +1,33 @@
+# Dependencies and builds
+node_modules
+dist
+dist-ssr
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.local
+supabase/.env
+supabase/functions/.env
+supabase/.temp
+supabase/.branches
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Sandbox-only CA bundle for local edge runtime
+supabase/functions/.certs

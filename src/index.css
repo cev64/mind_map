@@ -1,0 +1,112 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/barlow-condensed/600.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* §6 glass recipe */
+  .glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: var(--glass-hi), var(--glass-edge), var(--glass-shadow);
+  }
+  .glass-strong {
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: var(--glass-hi), var(--glass-edge), var(--glass-shadow-lg);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass,
+    .glass-strong {
+      background: var(--card);
+    }
+  }
+
+  /* §5 ambient backdrop */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    background: var(--page);
+  }
+  .backdrop i {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    animation: drift 36s var(--ease) infinite alternate;
+  }
+  .backdrop i:nth-child(1) {
+    width: 70vmax;
+    height: 70vmax;
+    top: -25vmax;
+    left: -25vmax;
+    background: radial-gradient(closest-side, var(--blob-a), transparent);
+  }
+  .backdrop i:nth-child(2) {
+    width: 60vmax;
+    height: 60vmax;
+    right: -20vmax;
+    bottom: -20vmax;
+    background: radial-gradient(closest-side, var(--blob-b), transparent);
+    animation-duration: 44s;
+  }
+  .backdrop i:nth-child(3) {
+    width: 50vmax;
+    height: 50vmax;
+    left: 25vw;
+    bottom: -15vmax;
+    background: radial-gradient(closest-side, var(--blob-c), transparent);
+    animation-duration: 52s;
+  }
+  .modal-lock .backdrop i {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(6vmax, 4vmax) scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
