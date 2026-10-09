@@ -22,7 +22,7 @@
 - PWA (`vite-plugin-pwa`) deferred to Phase 3, when there's a real app shell and icons.
 
 ## Known issues
-- `mind` is not yet in `supabase/config.toml` `[api] schemas`: PostgREST refuses to start while the schema doesn't exist. Add it in Phase 1 together with the migration that creates it.
+- None.
 
 ## Next steps
 1. Phase 1: migration for plan section 3, `embed` function + webhook, seed script; test locally, then show Charlie the SQL and apply via the connector.
