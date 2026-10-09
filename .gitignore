@@ -31,3 +31,6 @@ pnpm-debug.log*
 
 # Sandbox-only CA bundle for local edge runtime
 supabase/functions/.certs
+
+# Sandbox-only downloads (gte-small model files)
+.sandbox/
