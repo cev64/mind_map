@@ -12,6 +12,7 @@ Rules:
 - Every change is a new migration file in `supabase/migrations/` (`npx supabase migration new <name>`). Never edit a migration that has already been applied to remote; add a new one.
 - Every new function in `mind` needs an explicit `revoke execute on function ... from public, anon;` (PUBLIC execute is a global default; per-schema default privileges can't remove it).
 - RLS is enabled on every table, with policies scoped to `user_id = (select auth.uid())` (or via the parent row for child tables). Grant only what the `authenticated` role needs.
+- After any migration, include `notify pgrst, 'reload schema';` at the end so the API sees new objects.
 - Test **only against the local stack** (`npx supabase db reset`, then SQL via `psql` on the local DB URL from `npx supabase status`). Never run `db push`, `link`, or anything against the remote project; the lead does that.
 - No real personal data in seeds; generic sample content only.
 

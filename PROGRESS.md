@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-**Phase 1 — Data layer**: built and verified on the local stack; waiting for Charlie to approve applying the migration to the remote project. Phase 0 complete: placeholder live at https://cev64.github.io/mind_map/.
+**Phase 1 — Data layer**: complete (local + remote), waiting for Charlie's "continue" to start Phase 2 (chat brain). Phase 0 complete: placeholder live at https://cev64.github.io/mind_map/.
 
 ## Done
 - Vite 8 + React 19 + TypeScript + Tailwind v4 scaffold. Hash routing (`createHashRouter`, react-router 8).
@@ -12,7 +12,8 @@
 - `hello` Edge Function (health check) for the Phase 0 serve check.
 - `.github/workflows/deploy.yml`: lint, build, deploy to Pages on push to `main`.
 - Subagents in `.claude/agents/`: researcher, db-engineer, functions-engineer, frontend-engineer, reviewer.
-- Phase 1 (local): migration `supabase/migrations/20261009220918_mind_schema.sql` (plan section 3 in full: enums, 10 tables incl. `internal_config`, RLS on all, grants for `authenticated`/`service_role` only, triggers, HNSW + FK indexes, 5 RPCs, realtime publication). `embed` Edge Function (+ `_shared/embed.ts`, `_shared/supabaseAdmin.ts`). Local `supabase/seed.sql` with 2 test users and 17 generic nodes / 12 edges.
+- Phase 1: migration `supabase/migrations/20261009220918_mind_schema.sql` (plan section 3 in full: enums, 10 tables incl. `internal_config`, RLS on all, grants for `authenticated`/`service_role` only, triggers, HNSW + FK indexes, 5 RPCs, realtime publication). `embed` Edge Function (+ `_shared/embed.ts`, `_shared/supabaseAdmin.ts`). Local `supabase/seed.sql` with 2 test users and 17 generic nodes / 12 edges.
+- Phase 1 remote (2026-10-09, via connector, approved by Charlie): migrations `mind_schema` + `mind_expose_schema` applied; `internal_config` rows inserted (secret generated in SQL); `embed` deployed (verify_jwt=false). Verified: test node under Charlie's user embedded via trigger (384 dims, norm 1.0, HTTP 200); match_nodes/get_neighborhood work under RLS as Charlie; `authenticated` denied on internal_config; unauthenticated embed call → 401. Advisors: only INFO for `mind` (internal_config has no policies by design; new indexes unused).
 
 ## Decisions
 - **Repo is `cev64/mind_map` (underscore), confirmed by Charlie; CLAUDE.md and the plan updated.** Pages URL is therefore `https://cev64.github.io/mind_map/`. Vite `base` defaults to `/mind_map/`; CI sets it from the repo name, so a rename to `mind-map` needs no code change.
@@ -24,15 +25,18 @@
 - Additions beyond the plan's table sketch: `edges.meta` (5b needs it), `edges.created_by` check, `nodes.embedding_source_hash` (skip unchanged text), `mind.internal_config`, `on delete cascade` from `auth.users`. `nodes.updated_at` is bumped only by content changes, never by embedding writes (keeps link_checks freshness correct).
 - **Shared project:** the Budget project also hosts `betting` and `claudehub` schemas, exposed via `alter role authenticator set pgrst.db_schemas`. Migration `20261009230000_mind_expose_schema.sql` appends `mind` to that list (no-op locally).
 - Every new function in `mind` must `revoke execute ... from public, anon` explicitly.
+- After applying a migration remotely, run `notify pgrst, 'reload schema';` — PostgREST's cache didn't pick up the new tables until then (embed got "server misconfigured").
+- The connector waits for Charlie's confirmation on destructive SQL (DELETE); it times out after 60s if he isn't watching.
 - PWA (`vite-plugin-pwa`) deferred to Phase 3, when there's a real app shell and icons.
 
 ## Known issues
+- Remote test node `055f2fde-…` (title "Phase 1 test: …", meta.test='phase1') is marked `rejected` instead of deleted (the DELETE needed Charlie's confirmation). Delete it when convenient.
+- Other apps in the shared project have advisor warnings (`public.take_net_worth_snapshot` security definer callable by signed-in users; leaked password protection off). Not ours; mentioned to Charlie.
 - gte-small similarities are compressed high: unrelated sample nodes score ~0.72–0.79, related ~0.81–0.89. The plan's thresholds need tuning in Phase 2/2b: dedupe at 0.88 would wrongly merge "Learn a musical instrument" with "Should I learn piano or guitar?" (0.887); `link_candidates` min_similarity 0.55 filters nothing (k=10 still caps cost).
 
 ## Next steps
-1. Charlie: approve the SQL summary and give the magic-link email (used to pick his auth user for the remote check).
-2. Lead: apply both migrations via the connector; insert remote `internal_config` (functions_url = https://sygxozspiszqfawkmpzx.supabase.co/functions/v1, webhook_secret generated in SQL); deploy `embed` (verify_jwt=false); run advisors; verify insert → embedding on remote with a temporary node, then delete it.
-3. Before Phase 2: `ANTHROPIC_API_KEY` Edge Function secret.
+1. Charlie: test Phase 1 by hand (see checkpoint), set Edge Function secret `ANTHROPIC_API_KEY` in the dashboard, say "continue".
+2. Phase 2 (chat brain): researcher checks current Claude API (model IDs, tool use, streaming, prompt caching) first; `chat` function with context building, tool loop (search_mind, open_node, capture, propose_change, branch), persistence, token-usage logging; tune dedupe threshold for gte-small (0.88 too low).
 
 ## Sandbox notes (cloud sessions only)
 - The cloud container re-terminates TLS through a proxy. For `supabase functions serve` to fetch jsr/npm imports, a git-ignored `supabase/functions/.env` sets `DENO_TLS_CA_STORE=mozilla,system` and `SSL_CERT_FILE`/`DENO_CERT` to a copy of `/root/.ccr/ca-bundle.crt` in `supabase/functions/.certs/` (also git-ignored). Not needed on a normal machine.
