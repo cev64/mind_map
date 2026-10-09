@@ -2,7 +2,7 @@
 
 ## How to use this file (for Charlie)
 
-1. Create a new GitHub repo named `mind-map` under `cev64`. Make it **public** (GitHub Pages on a free account only serves public repos; nothing secret ever goes in the repo, so that's safe).
+1. Create a new GitHub repo named `mind_map` under `cev64`. Make it **public** (GitHub Pages on a free account only serves public repos; nothing secret ever goes in the repo, so that's safe).
 2. Put three files in the repo root:
    - this `MIND_MAP_PLAN.md`
    - `CLAUDE.md` (Claude Code reads it automatically at the start of every session)
@@ -14,7 +14,7 @@
 
 5. Each time it stops at a checkpoint, test what it lists, then reply "continue" (or tell it what's wrong). If you start a fresh session later, just say "continue the build" and it will pick up from `PROGRESS.md`.
 
-The live app will be at **https://cev64.github.io/mind-map/**.
+The live app will be at **https://cev64.github.io/mind_map/**.
 
 ---
 
@@ -54,7 +54,7 @@ In Phase 0, create these subagent definitions in `.claude/agents/` (one `.md` fi
 ### Supabase rules
 - Use the existing project **Budget**, ref `sygxozspiszqfawkmpzx`. Do **not** create a new project.
 - Everything goes in the **`mind` schema**. Never create, alter, or drop anything in `public` or any other schema, and never read from the budget tables.
-- All database changes are **migration files** in `supabase/migrations/`, applied through the Supabase CLI. No ad-hoc changes in the dashboard.
+- All database changes are **migration files** in `supabase/migrations/`, applied to remote through the Supabase connector (Phase 0 decision; originally the CLI). No ad-hoc changes in the dashboard.
 - Before applying any migration to the remote project, show Charlie the SQL summary and confirm.
 - Enable `vector` in the `extensions` schema (`create extension if not exists vector with schema extensions;`).
 
@@ -64,14 +64,14 @@ In Phase 0, create these subagent definitions in `.claude/agents/` (one `.md` fi
 - Before writing the `chat` function, check docs.claude.com for the current model IDs, tool-use request/response format, streaming, and prompt caching, and use what the docs say if it differs from this plan.
 
 ### Hosting rules (GitHub Pages)
-- The frontend is a static Vite build deployed to **GitHub Pages** from repo `cev64/mind-map` via a GitHub Actions workflow (`.github/workflows/deploy.yml`) on every push to `main`. Live URL: `https://cev64.github.io/mind-map/`.
-- Set Vite `base: '/mind-map/'` so assets resolve under the repo path.
+- The frontend is a static Vite build deployed to **GitHub Pages** from repo `cev64/mind_map` via a GitHub Actions workflow (`.github/workflows/deploy.yml`) on every push to `main`. Live URL: `https://cev64.github.io/mind_map/`.
+- Set Vite `base: '/mind_map/'` so assets resolve under the repo path.
 - Use **hash routing** (`createHashRouter` or equivalent) so deep links and refreshes work on Pages without server rewrites.
-- PWA: use `vite-plugin-pwa` with `scope` and `start_url` set to `/mind-map/`.
+- PWA: use `vite-plugin-pwa` with `scope` and `start_url` set to `/mind_map/`.
 - Build-time config comes from GitHub Actions **repository variables** `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (both are safe to be public). No other secrets exist in the frontend or the workflow.
 - The repo is **public**: never commit `.env.local`, keys, tokens, or personal data. Add a `.gitignore` before the first commit. Seed data must be generic sample content, not Charlie's real thoughts.
-- Supabase Auth: the site URL and redirect allow-list must include `https://cev64.github.io/mind-map/` (and `http://localhost:5173/mind-map/` for dev) so magic links land back in the app. Tell Charlie exactly where to set this if you can't do it from the CLI.
-- Edge Functions and migrations are deployed with the Supabase CLI from Claude Code (not from GitHub Actions), after Charlie confirms.
+- Supabase Auth: do not change the Site URL (shared with the Budget app). The redirect allow-list must include `https://cev64.github.io/mind_map/` (and `http://localhost:5173/mind_map/` for dev) so magic links land back in the app. Tell Charlie exactly where to set this if you can't do it yourself.
+- Edge Functions and migrations are deployed through the Supabase connector from Claude Code (not from GitHub Actions), after Charlie confirms.
 
 ### Design rules
 - **`STYLE.md` in the repo root is the source of truth for all visual design**: colors, fonts, spacing, radii, shadows, component look, light/dark behavior. Read it before Phase 3 and follow it over any visual suggestion in this plan.
@@ -84,7 +84,7 @@ In Phase 0, create these subagent definitions in `.claude/agents/` (one `.md` fi
 - The project's URL and publishable key for `.env.local`.
 - An Anthropic API key to set as the Edge Function secret.
 - The email to use for the magic-link login.
-- Confirmation that the GitHub repo `cev64/mind-map` exists, Pages source is set to GitHub Actions, and the two repository variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) are added under Settings → Secrets and variables → Actions → Variables. Give him the exact values to paste.
+- Confirmation that the GitHub repo `cev64/mind_map` exists, Pages source is set to GitHub Actions, and the two repository variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) are added under Settings → Secrets and variables → Actions → Variables. Give him the exact values to paste.
 
 ### Definition of done for each phase
 - Its ✅ checks in section 8 pass, and you've shown how you verified them.
@@ -128,7 +128,7 @@ The "mind reading" is not magic: **the database is the memory.** The Claude API 
   - Background work (embedding-adjacent extraction, reflection, dedupe checks): `claude-haiku-5-5`.
   - Verify current model IDs and the tool-use/prompt-caching request format against docs.claude.com before coding.
   - Use prompt caching on the system prompt + self model block.
-- **Frontend:** Vite + React + TypeScript + Tailwind, `@supabase/supabase-js`, `react-force-graph` (2D by default, 3D toggle). Hosted free on **GitHub Pages** (`https://cev64.github.io/mind-map/`), deployed by GitHub Actions. Build as a PWA so it installs on my phone.
+- **Frontend:** Vite + React + TypeScript + Tailwind, `@supabase/supabase-js`, `react-force-graph` (2D by default, 3D toggle). Hosted free on **GitHub Pages** (`https://cev64.github.io/mind_map/`), deployed by GitHub Actions. Build as a PWA so it installs on my phone.
 - **Auth:** single user, Supabase Auth magic link. RLS on every table (`user_id = auth.uid()`), because the API is public-facing.
 
 ## 3. Data model
@@ -363,11 +363,11 @@ Live: subscribe to Realtime on `mind.nodes` / `mind.edges` so nodes pop onto the
 ## 8. Phases (stop after each for me to test)
 
 **Phase 0 — Setup**
-- Repo scaffold (Vite React TS + Tailwind, hash router, `base: '/mind-map/'`), `.gitignore`, `.env.example`, Supabase CLI linked to project `sygxozspiszqfawkmpzx`.
+- Repo scaffold (Vite React TS + Tailwind, hash router, `base: '/mind_map/'`), `.gitignore`, `.env.example`, Supabase CLI linked to project `sygxozspiszqfawkmpzx`.
 - GitHub Actions workflow that builds and deploys to GitHub Pages on push to `main`.
 - Subagent definitions in `.claude/agents/` (section 0, Agent team).
 - Secrets: `ANTHROPIC_API_KEY` set on Edge Functions.
-- ✅ `supabase functions serve` runs locally; app loads locally **and** a placeholder page is live at `https://cev64.github.io/mind-map/` after a push.
+- ✅ `supabase functions serve` runs locally; app loads locally **and** a placeholder page is live at `https://cev64.github.io/mind_map/` after a push.
 
 **Phase 1 — Data layer**
 - Migration for section 3 (schema, enums, tables, RLS, triggers, indexes, RPCs, realtime publication).

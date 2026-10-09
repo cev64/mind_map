@@ -19,8 +19,9 @@ This repo builds Charlie's "map of my mind" app. The full spec is in `MIND_MAP_P
 - Run `reviewer` before every checkpoint and fix what it flags until it passes.
 
 ## Hard rules
-- **Supabase:** project **Budget**, ref `sygxozspiszqfawkmpzx`. Everything in the **`mind` schema** only. Never touch `public` or the budget tables. All DB changes are migration files in `supabase/migrations/`; show Charlie the SQL summary before applying to remote.
-- **Claude API:** Messages API with native tool use, called **only** from Supabase Edge Functions. Key is the Edge Function secret `ANTHROPIC_API_KEY`. **No MCP anywhere.** Check docs.claude.com for current model IDs and request formats before writing API code.
-- **Hosting:** static Vite build on **GitHub Pages** (`cev64/mind-map` → `https://cev64.github.io/mind-map/`) via GitHub Actions. `base: '/mind-map/'`, hash routing, PWA scoped to `/mind-map/`.
+- **Supabase:** project **Budget**, ref `sygxozspiszqfawkmpzx`. Everything in the **`mind` schema** only. Never touch `public` or the budget tables. All DB changes are migration files in `supabase/migrations/`; show Charlie the SQL summary before applying to remote. Remote migrations and Edge Function deploys go through the Supabase connector in Claude Code (decided in Phase 0) after testing on the local stack; this is dev tooling, not part of the app.
+- **Auth URLs:** never change the project's Site URL (shared with the Budget app). Only add this app's URLs to the redirect allow-list and pass `emailRedirectTo`.
+- **Claude API:** Messages API with native tool use, called **only** from Supabase Edge Functions. Key is the Edge Function secret `ANTHROPIC_API_KEY`. **No MCP anywhere in the app.** Check docs.claude.com for current model IDs and request formats before writing API code.
+- **Hosting:** static Vite build on **GitHub Pages** (`cev64/mind_map` → `https://cev64.github.io/mind_map/`; the repo uses an underscore, decided in Phase 0) via GitHub Actions. `base: '/mind_map/'` (CI sets it from the repo name), hash routing, PWA scoped to `/mind_map/`.
 - **Public repo:** never commit keys, tokens, `.env.local`, or real personal content. Seed data is generic sample content.
 - **Design:** tokens from `STYLE.md` in one place (Tailwind theme / CSS variables); no hard-coded colors or font sizes in components. Test at ~380px (Fold folded), ~900px (unfolded), and desktop.
