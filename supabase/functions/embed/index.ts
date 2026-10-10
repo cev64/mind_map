@@ -65,6 +65,9 @@ Deno.serve(async (req) => {
     const text = nodeEmbeddingText(node);
     const hash = await sha256Hex(text);
     if (hash === node.embedding_source_hash) {
+      // `chat` writes the embedding inline, so its nodes arrive here already embedded: still hand them to
+      // `link`. Cheap if nothing changed: claim_link_run dedupes a version, link_candidates skips checked pairs.
+      requestLink(auth.config, node.id, node.content_updated_at);
       return json({ status: "skipped", reason: "text unchanged" });
     }
 

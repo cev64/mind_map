@@ -3,9 +3,10 @@
 // Answers 202 at once and does the work in the background (EdgeRuntime.waitUntil); each run is logged in
 // mind.link_runs (status, counts, model, token usage). Service role is allowed here (plan section 9).
 //
-// Flow: debounce gate (mind.claim_link_run) -> skip rejected/archived nodes or link_suggester off ->
-// mind.link_candidates -> one Haiku call -> pending edges for confident verdicts -> every judged pair
-// upserted into mind.link_checks (checked_at = run start, so an edit made during the run re-checks).
+// Flow: debounce gate (mind.claim_link_run, which also drops repeat requests for a version) ->
+// skip rejected/archived nodes or link_suggester off -> mind.link_candidates -> one Haiku call ->
+// pending edges for confident verdicts (mind.insert_link_edges) -> every judged pair upserted into
+// mind.link_checks (checked_at = run start, so an edit made during the run re-checks).
 import "@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { type NodeRow, UUID_RE } from "../_shared/mind.ts";
@@ -34,7 +35,7 @@ function errText(e: unknown): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Claim {
-  status: "claimed" | "wait" | "superseded" | "missing";
+  status: "claimed" | "wait" | "superseded" | "done" | "missing";
   wait_seconds: number | null;
   run_id: number | null;
   started_at: string | null;
@@ -149,19 +150,9 @@ async function runLink(db: AdminClient, nodeId: string, requestedVersion: string
     }
 
     // --- edges for confident, specific verdicts ---
-    let linkable = result.verdicts.filter((v) => v.relation !== "none" && v.confidence >= MIN_EDGE_CONFIDENCE);
-    if (linkable.length > 0) {
-      // Pairs linked since the candidates were loaded (chat, or the partner's own run when several nodes were
-      // saved together) keep their existing edge.
-      const ids = linkable.map((v) => v.candidateId).join(",");
-      const { data: existing, error: exErr } = await db
-        .from("edges")
-        .select("source_id, target_id")
-        .or(`and(source_id.eq.${nodeId},target_id.in.(${ids})),and(target_id.eq.${nodeId},source_id.in.(${ids}))`);
-      if (exErr) throw new Error(`load existing edges: ${exErr.message}`);
-      const linked = new Set((existing ?? []).map((e) => (e.source_id === nodeId ? e.target_id : e.source_id)));
-      linkable = linkable.filter((v) => !linked.has(v.candidateId));
-    }
+    // insert_link_edges skips pairs already connected (chat, or the partner's own run when several nodes were
+    // saved together) under per-pair locks, so concurrent runs can't link one pair twice.
+    const linkable = result.verdicts.filter((v) => v.relation !== "none" && v.confidence >= MIN_EDGE_CONFIDENCE);
     let edgesCreated = 0;
     if (linkable.length > 0) {
       const rows = linkable.map((v) => ({
@@ -171,15 +162,11 @@ async function runLink(db: AdminClient, nodeId: string, requestedVersion: string
         weight: v.confidence,
         rationale: v.rationale,
         status: settings.auto_apply && v.confidence >= settings.link_auto_accept_confidence ? "active" : "pending",
-        created_by: "claude",
         meta: { source: "link_suggester", model: result.model, link_run_id: runId },
       }));
-      const { data: inserted, error: edgeErr } = await db
-        .from("edges")
-        .upsert(rows, { onConflict: "source_id,target_id,kind", ignoreDuplicates: true })
-        .select("id");
+      const { data: inserted, error: edgeErr } = await db.rpc("insert_link_edges", { p_edges: rows });
       if (edgeErr) throw new Error(`insert edges: ${edgeErr.message}`);
-      edgesCreated = inserted?.length ?? 0;
+      edgesCreated = Array.isArray(inserted) ? inserted.length : 0;
     }
 
     // --- record every judged pair (including none) so it isn't judged again until one side changes ---

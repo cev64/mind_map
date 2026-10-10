@@ -1,6 +1,7 @@
 -- Phase 2b: link suggester support (plan section 5b).
 -- 1. mind.link_runs: one row per `link` run (debounce state + per-call model/usage log for cost watching).
 -- 2. mind.claim_link_run(): atomic per-node debounce gate used by the `link` Edge Function.
+--    mind.insert_link_edges(): pair-locked edge insert, so concurrent runs can't link one pair twice.
 -- 3. mind.link_candidates(): default min_similarity 0.55 -> 0.78 (gte-small similarities are compressed high).
 
 -- ---------------------------------------------------------------------------
@@ -23,6 +24,7 @@ create table mind.link_runs (
 );
 
 create index link_runs_node_started_idx on mind.link_runs (node_id, started_at desc);
+create index link_runs_node_version_idx on mind.link_runs (node_id, node_version);
 create index link_runs_user_started_idx on mind.link_runs (user_id, started_at desc);
 
 alter table mind.link_runs enable row level security;
@@ -40,6 +42,8 @@ grant all on mind.link_runs to service_role;
 -- ---------------------------------------------------------------------------
 -- Called by `link` with the content version (nodes.content_updated_at) it was triggered for.
 --   'superseded'  the node was edited again since; that edit's own run will handle it.
+--   'done'        this version already has a run (running, or finished without error); nothing to do.
+--                 A run still 'running' after 5 minutes is treated as dead (killed isolate).
 --   'wait'        a run for this node started less than p_min_interval ago; retry after wait_seconds.
 --   'claimed'     a link_runs row was inserted; proceed. run_id/started_at identify it.
 --   'missing'     the node no longer exists.
@@ -74,6 +78,14 @@ begin
     return query select 'superseded'::text, null::float, null::bigint, null::timestamptz;
     return;
   end if;
+  if exists (
+    select 1 from mind.link_runs r
+    where r.node_id = p_node_id and r.node_version = p_version and r.status <> 'error'
+      and not (r.status = 'running' and r.started_at < v_now - interval '5 minutes')  -- killed isolate
+  ) then
+    return query select 'done'::text, null::float, null::bigint, null::timestamptz;
+    return;
+  end if;
 
   select max(r.started_at) into v_last from mind.link_runs r where r.node_id = p_node_id;
   if v_last is not null and v_last > v_now - p_min_interval then
@@ -91,6 +103,57 @@ $$;
 
 revoke execute on function mind.claim_link_run(uuid, timestamptz, interval) from public, anon, authenticated;
 grant execute on function mind.claim_link_run(uuid, timestamptz, interval) to service_role;
+
+-- insert_link_edges: inserts the suggester's edges, skipping any pair that is already connected (either
+-- direction, any kind). Pair locks are taken up front in sorted order and held to commit, so two runs that
+-- judge the same pair at once (nodes saved together) can't both link it, and can't deadlock.
+-- p_edges: [{user_id, source_id, target_id, kind, weight, rationale, status, meta}]. Returns inserted ids.
+create function mind.insert_link_edges(p_edges jsonb)
+returns setof uuid
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_pair record;
+  v_edge jsonb;
+  v_src uuid;
+  v_tgt uuid;
+  v_id uuid;
+begin
+  for v_pair in
+    select distinct least((e->>'source_id')::uuid, (e->>'target_id')::uuid) as a,
+                    greatest((e->>'source_id')::uuid, (e->>'target_id')::uuid) as b
+    from jsonb_array_elements(p_edges) e
+    order by 1, 2
+  loop
+    perform pg_advisory_xact_lock(hashtextextended('mind.pair:' || v_pair.a || ':' || v_pair.b, 0));
+  end loop;
+
+  for v_edge in select e from jsonb_array_elements(p_edges) e loop
+    v_src := (v_edge->>'source_id')::uuid;
+    v_tgt := (v_edge->>'target_id')::uuid;
+    continue when exists (
+      select 1 from mind.edges x
+      where (x.source_id = v_src and x.target_id = v_tgt) or (x.source_id = v_tgt and x.target_id = v_src)
+    );
+    insert into mind.edges (user_id, source_id, target_id, kind, weight, rationale, status, created_by, meta)
+    values (
+      (v_edge->>'user_id')::uuid, v_src, v_tgt,
+      (v_edge->>'kind')::mind.edge_kind,
+      (v_edge->>'weight')::real,
+      v_edge->>'rationale',
+      (v_edge->>'status')::mind.item_status,
+      'claude',
+      coalesce(v_edge->'meta', '{}'::jsonb)
+    )
+    returning id into v_id;
+    return next v_id;
+  end loop;
+end;
+$$;
+
+revoke execute on function mind.insert_link_edges(jsonb) from public, anon, authenticated;
+grant execute on function mind.insert_link_edges(jsonb) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 3. link_candidates: new default threshold

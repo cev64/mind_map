@@ -31,7 +31,8 @@ type Direction = (typeof DIRECTIONS)[number];
 /** Candidates are labelled c1..c10 in the prompt; a fixed enum keeps the tool schema byte-stable. */
 const CANDIDATE_LABELS = Array.from({ length: MAX_CANDIDATES }, (_, i) => `c${i + 1}`);
 
-const SYSTEM = `You find meaningful connections in a personal "map of my mind": a graph of one person's ideas, beliefs, values, goals, plans, questions, projects, people, themes and insights.
+const SYSTEM =
+  `You find meaningful connections in a personal "map of my mind": a graph of one person's ideas, beliefs, values, goals, plans, questions, projects, people, themes and insights.
 
 You get one NEW node and a few CANDIDATE nodes that are close to it in embedding space. Judge each NEW-candidate pair.
 
