@@ -431,3 +431,10 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/embed/deno.json"
 entrypoint = "./functions/embed/index.ts"
+
+[functions.chat]
+enabled = true
+# Called by the signed-in user; the function validates the JWT itself (getUser) and acts with it so RLS applies.
+verify_jwt = true
+import_map = "./functions/chat/deno.json"
+entrypoint = "./functions/chat/index.ts"
