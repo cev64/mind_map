@@ -146,8 +146,11 @@ begin
       'claude',
       coalesce(v_edge->'meta', '{}'::jsonb)
     )
+    on conflict (source_id, target_id, kind) do nothing  -- chat inserted the same edge meanwhile
     returning id into v_id;
-    return next v_id;
+    if v_id is not null then
+      return next v_id;
+    end if;
   end loop;
 end;
 $$;
