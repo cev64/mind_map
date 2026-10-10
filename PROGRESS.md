@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-**Phase 2 — Chat brain**: complete (deployed, verified on remote, reviewer PASS). **Next: Phase 2b (link suggester) — see `HANDOFF.md`.** Phase 0 complete: placeholder live at https://cev64.github.io/mind_map/.
+**Phase 2b — Link suggester**: built and verified locally (mock Claude endpoint); remote migration + deploy waiting on Charlie's OK of the SQL summary. Phases 0–2 complete; placeholder live at https://cev64.github.io/mind_map/.
 
 ## Done
 - Vite 8 + React 19 + TypeScript + Tailwind v4 scaffold. Hash routing (`createHashRouter`, react-router 8).
@@ -16,6 +16,8 @@
 - Phase 1 remote (2026-10-09, via connector, approved by Charlie): migrations `mind_schema` + `mind_expose_schema` applied; `internal_config` rows inserted (secret generated in SQL); `embed` deployed (verify_jwt=false). Verified: test node under Charlie's user embedded via trigger (384 dims, norm 1.0, HTTP 200); match_nodes/get_neighborhood work under RLS as Charlie; `authenticated` denied on internal_config; unauthenticated embed call → 401. Advisors: only INFO for `mind` (internal_config has no policies by design; new indexes unused).
 
 - Phase 2: `chat` Edge Function (`supabase/functions/chat/`: index/loop/tools/context/prompt/config) + `_shared/mind.ts`, `_shared/supabaseUser.ts`; migration `20261010000000_mind_messages_meta.sql` (messages.meta for per-call model/usage). Deployed (verify_jwt=true). Remote end-to-end (temporary user mindmap-test@example.com): three related ideas over two messages → 4 pending nodes + 4 edges with rationales; restating an idea added nothing; "what do I think about screens" answered from retrieved/searched nodes; usage logged per call; prompt caching hits (~3–7k cached tokens per call).
+
+- Phase 2b (local): migration `20261010120000_mind_link_suggester.sql` (`mind.link_runs`, `mind.claim_link_run()`, `link_candidates` default 0.55 → 0.78); `link` Edge Function (`link/index.ts`, `judge.ts`, `config.ts`; verify_jwt=false, webhook secret); `embed` chains `link` after a successful write; shared `_shared/webhookAuth.ts` (secret check + `internal_config` loader, used by embed and link). Verified locally: chain, debounce, unchanged re-save → no run, body edit → re-judge, auto_apply, toggle off, 401 without secret, edge/link_checks writes (mock Claude endpoint via `ANTHROPIC_BASE_URL`).
 
 ## Decisions
 - **Repo is `cev64/mind_map` (underscore), confirmed by Charlie; CLAUDE.md and the plan updated.** Pages URL is therefore `https://cev64.github.io/mind_map/`. Vite `base` defaults to `/mind_map/`; CI sets it from the repo name, so a rename to `mind-map` needs no code change.
@@ -34,12 +36,16 @@
 - **gte-small thresholds (calibrated):** dedupe 0.92, auto-retrieval 0.80 (top 12), search_mind 0.75. `capture`/`branch` accept `force_new` to save a flagged near-variant.
 - **SSE contract for the frontend:** `meta` {conversation_id, user_message_id} → `text` {delta}* → `tool` {name, status, summary, node_ids?, edge_ids?}* → `done` {assistant_message_ids, usage, stop_reason, iterations} | `error` {message, category?}. Node chips in replies: `[[node:<id>|<title>]]`.
 - Deploying via the connector means sending every file inline; after each deploy, fetch it back (`get_edge_function`) and diff against the repo.
+- **Link suggester debounce (2b):** per-node gate `mind.claim_link_run(node_id, version, 30s)` under an advisory lock. `embed` passes the `content_updated_at` it embedded as `version`. Outcomes: `superseded` (node edited again; that edit's run takes over), `wait` (a run started < 30 s ago; `link` sleeps and retries, at most twice), `claimed` (inserts a `link_runs` row). So the first save is judged at once (keeps the plan's "edge within ~10 s" check) and any further saves inside 30 s collapse into one trailing run for the newest text: at most one Haiku call per node per 30 s. A strict 30 s trailing debounce would have made every new node wait 30 s, contradicting the 10 s check.
+- **`mind.link_runs`** logs every `link` run (status, candidates, edges_created, model, token usage incl. stop_reason, error). It is the debounce state and the cost log for the suggester (owner-readable via RLS, written by service role only).
+- **`link` function:** answers 202 at once and works in `EdgeRuntime.waitUntil`; `embed` fires it fire-and-forget (also via waitUntil). One Haiku call (`claude-haiku-5-5`, adaptive thinking, effort `low`, no temperature, no `fallbacks`) with a strict `submit_links` tool, `tool_choice: auto` plus an instruction, then a check that the call happened; refusal/max_tokens/no call → run recorded as `error`, nothing written. Candidates are labelled c1–c10 (fixed enum keeps the schema stable). Relations: supports, contradicts, branches_from, serves, depends_on, part_of, inspired_by, none (no relates_to/evolved_into). Edges read "SOURCE kind TARGET" (same as chat). Edges for verdicts ≠ none with confidence ≥ 0.6: `created_by='claude'`, `weight=confidence`, `meta={source:'link_suggester', model, link_run_id}`, `pending` unless auto_apply and confidence ≥ `link_auto_accept_confidence`. Pairs that got linked meanwhile are skipped. Every judged pair is upserted into `link_checks` with the model's verdict (even below 0.6) and `checked_at` = run start, so an edit made during a run is re-checked.
+- **`link_candidates` threshold 0.78:** on the seed map the lowest already-linked pair is 0.799 and same-topic pairs sit at ~0.79–0.89; 0.78 lets same-topic pairs reach Haiku (so "similar topic, no edge" pairs land in `link_checks`). Cost is tiny (~1–2k input tokens per call on Haiku 5.5).
 - PWA (`vite-plugin-pwa`) deferred to Phase 3, when there's a real app shell and icons.
 
 ## Known issues
 - Remote test node `055f2fde-…` (title "Phase 1 test: …", meta.test='phase1') is marked `rejected` instead of deleted (the DELETE needed Charlie's confirmation). Delete it when convenient.
 - Other apps in the shared project have advisor warnings (`public.take_net_worth_snapshot` security definer callable by signed-in users; leaked password protection off). Not ours; mentioned to Charlie.
-- gte-small similarities are compressed high (unrelated ~0.72–0.79, related ~0.81–0.89). Chat thresholds are tuned (see Decisions); `link_candidates` min_similarity 0.55 still filters nothing — tune in Phase 2b.
+- gte-small similarities are compressed high (unrelated ~0.72–0.79, related ~0.81–0.89). Chat thresholds are tuned; `link_candidates` uses 0.78 (see Decisions).
 - Phase 2 review notes (non-blocking): no per-user allowlist on `chat` (any account in the shared project could spend the Anthropic key — fix before Phase 3 goes live); `deno check` flags the `Supabase` global in `_shared/embed.ts` (types only); a failed mid-loop persist or concurrent requests could leave an unmatched tool_use in a conversation's history.
 - Chat sometimes picks `depends_on` where `supports` reads better (belief → plan). Prompt tuning candidate, not a bug.
 
@@ -54,4 +60,8 @@ See `HANDOFF.md` for the full Phase 2b brief. In short:
 - `scripts/sandbox/setup.sh` bootstraps a fresh container in one command (npm install, dockerd, supabase start, edge-runtime TLS env, serve + model seed, db reset + embeddings).
 - `scripts/sandbox/reset-local.sh` does db reset + serve restart + model seed + embed-all in one go.
 - gte-small can't download in the sandbox (edge runtime's downloader ignores the proxy CA). `scripts/sandbox/seed-gte-cache.sh` copies the model into the runtime cache; run it right after `functions serve` starts and before any embed call, and again after every `db reset` (which recreates the container; restart serve too).
+- `seed-gte-cache.sh` needs the `xxhash` Python module (setup.sh installs it). `reset-local.sh` stops the edge-runtime container that `supabase start` launches, otherwise it waits forever for it to exit.
+- Any file change under `supabase/functions` while serve runs recreates the runtime container and drops the seeded model ("failed to download"): restart serve and re-run `seed-gte-cache.sh`.
+- To exercise `link`'s write path without an Anthropic key, add `ANTHROPIC_API_KEY=<anything>` and `ANTHROPIC_BASE_URL=http://172.18.0.1:<port>` (the docker network gateway) to the git-ignored `supabase/functions/.env`, run a small mock that answers `/v1/messages` with a `submit_links` tool_use, and restart serve. Remove the lines afterwards.
+- `deno check`: install Deno with `npm i deno@2` in a scratch dir; it reports only the known `Supabase`/`EdgeRuntime` global-type errors.
 - Docker isn't running at session start: `sudo dockerd &` first, then `npx supabase start -x studio,imgproxy,vector,logflare,supavisor,postgres-meta,mailpit`.

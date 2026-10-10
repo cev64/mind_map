@@ -1,10 +1,11 @@
 // `embed`: called by a Postgres trigger (pg_net) after a node is inserted or its title/body/kind changes.
 // POST {"node_id": "<uuid>"} with header x-mind-webhook-secret. Writes mind.nodes.embedding (gte-small, 384d).
 // The secret lives only in mind.internal_config (the trigger reads it there too), so it never needs
-// to be copied into an Edge Function secret.
+// to be copied into an Edge Function secret. After a successful write it chains `link` (plan section 5b).
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { embedText, nodeEmbeddingText, sha256Hex } from "../_shared/embed.ts";
 import { createAdminClient } from "../_shared/supabaseAdmin.ts";
+import { checkWebhookSecret, type InternalConfig } from "../_shared/webhookAuth.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -12,51 +13,31 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
 
-// Constant-time comparison: hash both sides to equal length, then XOR-accumulate.
-async function secretsMatch(a: string, b: string): Promise<boolean> {
-  const enc = new TextEncoder();
-  const [ha, hb] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(a)),
-    crypto.subtle.digest("SHA-256", enc.encode(b)),
-  ]);
-  const va = new Uint8Array(ha);
-  const vb = new Uint8Array(hb);
-  let diff = 0;
-  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
-  return diff === 0;
-}
-
-let cachedSecret: string | null = null;
-
-async function webhookSecret(db: ReturnType<typeof createAdminClient>): Promise<string | null> {
-  if (cachedSecret) return cachedSecret;
-  const { data, error } = await db
-    .from("internal_config")
-    .select("value")
-    .eq("key", "webhook_secret")
-    .maybeSingle();
-  if (error) throw new Error(`load webhook secret: ${error.message}`);
-  cachedSecret = data?.value ?? null;
-  return cachedSecret;
+// Fire-and-forget POST to `link` for the version just embedded. `link` answers 202 at once and does its
+// work in the background, so this only waits for the hand-off; waitUntil keeps it alive after we return.
+function requestLink(config: InternalConfig, nodeId: string, version: string): void {
+  if (!config.functionsUrl || !config.webhookSecret) return;
+  const url = config.functionsUrl.replace(/\/+$/, "") + "/link";
+  const call = fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-mind-webhook-secret": config.webhookSecret },
+    body: JSON.stringify({ node_id: nodeId, version }),
+    signal: AbortSignal.timeout(10_000),
+  })
+    .then(async (res) => {
+      if (!res.ok) console.error(`embed: link request for ${nodeId} returned ${res.status}`);
+      await res.body?.cancel();
+    })
+    .catch((e) => console.error(`embed: link request for ${nodeId} failed:`, e instanceof Error ? e.message : e));
+  EdgeRuntime.waitUntil(call);
 }
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const db = createAdminClient();
-  let expected: string | null;
-  try {
-    expected = await webhookSecret(db);
-  } catch (e) {
-    console.error("embed:", e instanceof Error ? e.message : String(e));
-    return json({ error: "server misconfigured" }, 500);
-  }
-  if (!expected) {
-    console.error("embed: mind.internal_config has no webhook_secret; refusing all requests");
-    return json({ error: "server misconfigured" }, 500);
-  }
-  const provided = req.headers.get("x-mind-webhook-secret") ?? "";
-  if (!(await secretsMatch(provided, expected))) return json({ error: "unauthorized" }, 401);
+  const auth = await checkWebhookSecret(req, db, "embed");
+  if (auth.reject) return auth.reject;
 
   let nodeId: unknown;
   try {
@@ -100,8 +81,8 @@ Deno.serve(async (req) => {
     if (updErr) throw new Error(`write embedding: ${updErr.message}`);
     if (!updated || updated.length === 0) return json({ status: "stale", node_id: node.id });
 
-    // PHASE 2b HOOK: after a successful write, fire-and-forget the `link` function for node.id
-    // (if settings.link_suggester is on). Not implemented yet.
+    // Chain the link suggester for this exact version (`link` checks settings.link_suggester and debounces).
+    requestLink(auth.config, node.id, node.content_updated_at);
 
     return json({ status: "embedded", node_id: node.id, dims: vector.length });
   } catch (e) {

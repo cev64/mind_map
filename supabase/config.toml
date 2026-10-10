@@ -438,3 +438,10 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/chat/deno.json"
 entrypoint = "./functions/chat/index.ts"
+
+[functions.link]
+enabled = true
+# Called by `embed` (not by users) after an embedding write; authenticated with the same webhook secret.
+verify_jwt = false
+import_map = "./functions/link/deno.json"
+entrypoint = "./functions/link/index.ts"

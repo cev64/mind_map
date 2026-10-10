@@ -5,6 +5,8 @@ S=${TMPDIR:-/tmp}  # serve.log goes here
 cd "$(dirname "$0")/../.."
 npx supabase db reset 2>&1 | tail -1
 kill $(pgrep -x supabase) 2>/dev/null || true
+# `supabase start` also runs an edge-runtime container that serve must replace
+docker stop supabase_edge_runtime_mind_map >/dev/null 2>&1 || true
 until ! docker ps --format '{{.Names}}' | grep -q edge_runtime; do sleep 1; done
 (npx supabase functions serve --no-verify-jwt > $S/serve.log 2>&1 &)
 for i in $(seq 1 60); do docker ps --format '{{.Names}}' | grep -q edge_runtime && break; sleep 1; done

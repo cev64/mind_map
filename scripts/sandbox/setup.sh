@@ -7,6 +7,7 @@ set -e
 cd "$(dirname "$0")/../.."
 
 [ -d node_modules ] || npm install
+python3 -c "import xxhash" 2>/dev/null || pip install -q xxhash  # seed-gte-cache.sh needs it
 
 if ! docker info >/dev/null 2>&1; then
   (sudo dockerd > "${TMPDIR:-/tmp}/dockerd.log" 2>&1 &)
