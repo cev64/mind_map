@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-**Phase 2 — Chat brain**: built, deployed and verified on the remote project; reviewer pending / checkpoint. Phase 1 complete. Phase 0 complete: placeholder live at https://cev64.github.io/mind_map/.
+**Phase 2 — Chat brain**: complete (deployed, verified on remote, reviewer PASS). **Next: Phase 2b (link suggester) — see `HANDOFF.md`.** Phase 0 complete: placeholder live at https://cev64.github.io/mind_map/.
 
 ## Done
 - Vite 8 + React 19 + TypeScript + Tailwind v4 scaffold. Hash routing (`createHashRouter`, react-router 8).
@@ -40,15 +40,18 @@
 - Remote test node `055f2fde-…` (title "Phase 1 test: …", meta.test='phase1') is marked `rejected` instead of deleted (the DELETE needed Charlie's confirmation). Delete it when convenient.
 - Other apps in the shared project have advisor warnings (`public.take_net_worth_snapshot` security definer callable by signed-in users; leaked password protection off). Not ours; mentioned to Charlie.
 - gte-small similarities are compressed high (unrelated ~0.72–0.79, related ~0.81–0.89). Chat thresholds are tuned (see Decisions); `link_candidates` min_similarity 0.55 still filters nothing — tune in Phase 2b.
+- Phase 2 review notes (non-blocking): no per-user allowlist on `chat` (any account in the shared project could spend the Anthropic key — fix before Phase 3 goes live); `deno check` flags the `Supabase` global in `_shared/embed.ts` (types only); a failed mid-loop persist or concurrent requests could leave an unmatched tool_use in a conversation's history.
 - Chat sometimes picks `depends_on` where `supports` reads better (belief → plan). Prompt tuning candidate, not a bug.
 
 ## Next steps
-1. Reviewer pass on Phase 2, then checkpoint with Charlie.
-2. Temporary remote test user `mindmap-test@example.com` (password only in the session scratchpad) still exists with ~4 test nodes; keep for Phase 2b testing, then delete it (cascade removes its rows; DELETE needs Charlie's confirmation in the connector).
-3. Phase 2b: `link` function (Haiku `claude-haiku-5-5`, no server-side fallback for Haiku), chained from `embed`; tune link_candidates min_similarity (~0.80 for gte-small).
+See `HANDOFF.md` for the full Phase 2b brief. In short:
+1. Phase 2b: `link` function (Haiku `claude-haiku-5-5`, no server-side fallback for Haiku), chained from `embed`; debounce; tune `link_candidates` min_similarity (~0.80 for gte-small).
+2. Delete the temporary remote test user `mindmap-test@example.com` once 2b is verified (needs Charlie's confirmation in the connector).
+3. Raise the Phase 2 review notes with Charlie (cost allowlist for `chat` first).
 
 ## Sandbox notes (cloud sessions only)
 - The cloud container re-terminates TLS through a proxy. For `supabase functions serve` to fetch jsr/npm imports, a git-ignored `supabase/functions/.env` sets `DENO_TLS_CA_STORE=mozilla,system` and `SSL_CERT_FILE`/`DENO_CERT` to a copy of `/root/.ccr/ca-bundle.crt` in `supabase/functions/.certs/` (also git-ignored). Not needed on a normal machine.
+- `scripts/sandbox/setup.sh` bootstraps a fresh container in one command (npm install, dockerd, supabase start, edge-runtime TLS env, serve + model seed, db reset + embeddings).
 - `scripts/sandbox/reset-local.sh` does db reset + serve restart + model seed + embed-all in one go.
 - gte-small can't download in the sandbox (edge runtime's downloader ignores the proxy CA). `scripts/sandbox/seed-gte-cache.sh` copies the model into the runtime cache; run it right after `functions serve` starts and before any embed call, and again after every `db reset` (which recreates the container; restart serve too).
 - Docker isn't running at session start: `sudo dockerd &` first, then `npx supabase start -x studio,imgproxy,vector,logflare,supavisor,postgres-meta,mailpit`.

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Sandbox-only: db reset, restart `functions serve` with gte-small pre-seeded, then embed every node.
 set -e
-S=${TMPDIR:-/tmp}
-cd /home/user/mind_map
+S=${TMPDIR:-/tmp}  # serve.log goes here
+cd "$(dirname "$0")/../.."
 npx supabase db reset 2>&1 | tail -1
 kill $(pgrep -x supabase) 2>/dev/null || true
 until ! docker ps --format '{{.Names}}' | grep -q edge_runtime; do sleep 1; done
