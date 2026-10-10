@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-**Phase 2b — Link suggester**: built and verified locally (mock Claude endpoint); remote migration + deploy waiting on Charlie's OK of the SQL summary. Phases 0–2 complete; placeholder live at https://cev64.github.io/mind_map/.
+**Phase 2b — Link suggester**: migration applied and `link` (v1) + `embed` (v3) deployed on remote (2026-10-10, approved by Charlie). Remote checks 1 and 2 passed; check 3 (body edit re-checks) is waiting on Charlie to confirm the test UPDATE in the connector, then delete the test user. Phases 0–2 complete; placeholder live at https://cev64.github.io/mind_map/.
 
 ## Done
 - Vite 8 + React 19 + TypeScript + Tailwind v4 scaffold. Hash routing (`createHashRouter`, react-router 8).
@@ -18,6 +18,8 @@
 - Phase 2: `chat` Edge Function (`supabase/functions/chat/`: index/loop/tools/context/prompt/config) + `_shared/mind.ts`, `_shared/supabaseUser.ts`; migration `20261010000000_mind_messages_meta.sql` (messages.meta for per-call model/usage). Deployed (verify_jwt=true). Remote end-to-end (temporary user mindmap-test@example.com): three related ideas over two messages → 4 pending nodes + 4 edges with rationales; restating an idea added nothing; "what do I think about screens" answered from retrieved/searched nodes; usage logged per call; prompt caching hits (~3–7k cached tokens per call).
 
 - Phase 2b (local): migration `20261010120000_mind_link_suggester.sql` (`mind.link_runs`, `mind.claim_link_run()`, `mind.insert_link_edges()`, `link_candidates` default 0.55 → 0.78); `link` Edge Function (`link/index.ts`, `judge.ts`, `config.ts`; verify_jwt=false, webhook secret); `embed` chains `link` after a successful write; shared `_shared/webhookAuth.ts` (secret check + `internal_config` loader, used by embed and link). Verified locally: chain (incl. chat-style inline-embedded nodes), debounce, repeat-request dedupe, 15 concurrent runs with no duplicate pair edges, unchanged re-save → no run, body edit → re-judge, auto_apply, toggle off, 401 without secret, edge/link_checks writes (mock Claude endpoint via `ANTHROPIC_BASE_URL`).
+
+- Phase 2b remote (2026-10-10, via connector, approved by Charlie): migration `mind_link_suggester` applied (grants verified: claim_link_run/insert_link_edges service_role only; link_runs RLS on, authenticated read-only); `link` deployed (verify_jwt=false) and `embed` redeployed. On the test user: an insight that obviously supports "Keep a paper journal every morning" got a pending `supports` edge 5.9 s after insert with a specific rationale (1,558 in / 367 out tokens); a same-topic question ("Which notebook brands use the thinnest paper?", sims 0.83–0.86) got no edge and all 5 pairs landed in `link_checks`; an unchanged re-save created no run. The connector now asks Charlie to confirm UPDATEs too (two timed out at 60 s).
 
 ## Decisions
 - **Repo is `cev64/mind_map` (underscore), confirmed by Charlie; CLAUDE.md and the plan updated.** Pages URL is therefore `https://cev64.github.io/mind_map/`. Vite `base` defaults to `/mind_map/`; CI sets it from the repo name, so a rename to `mind-map` needs no code change.
